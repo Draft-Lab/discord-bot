@@ -237,3 +237,4 @@ eslint.config.js
 **/*.sw?
 
 .storage
+.exports
