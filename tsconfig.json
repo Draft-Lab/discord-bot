@@ -1,0 +1,36 @@
+{
+	"$schema": "https://json.schemastore.org/tsconfig",
+	"compilerOptions": {
+		"baseUrl": ".",
+		"paths": {
+			"@/*": ["./src/*"]
+		},
+		"target": "ESNext",
+		"module": "ESNext",
+		"skipLibCheck": true,
+		"verbatimModuleSyntax": true,
+		"useDefineForClassFields": true,
+		"lib": ["ESNext"],
+		"noEmit": true,
+		"isolatedModules": true,
+		"moduleDetection": "force",
+		"moduleResolution": "bundler",
+		"allowImportingTsExtensions": true,
+		"allowJs": true,
+		"erasableSyntaxOnly": true,
+		"esModuleInterop": true,
+		"resolveJsonModule": true,
+		"strict": true,
+		"strictNullChecks": true,
+		"noUnusedLocals": true,
+		"noUnusedParameters": true,
+		"noImplicitOverride": true,
+		"noImplicitReturns": true,
+		"noImplicitAny": true,
+		"noImplicitThis": true,
+		"noUncheckedIndexedAccess": true,
+		"noFallthroughCasesInSwitch": true,
+		"types": ["node", "@total-typescript/ts-reset"]
+	},
+	"exclude": ["node_modules", "build", "dist"]
+}
