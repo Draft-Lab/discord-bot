@@ -3,7 +3,9 @@ import { z } from "zod"
 
 export const env = createEnv({
 	server: {
-		DISCORD_TOKEN: z.string()
+		DISCORD_TOKEN: z.string(),
+		DISCORD_BOT_API_KEY: z.string(),
+		DISCORD_BOT_API_URL: z.string()
 	},
 	runtimeEnv: process.env,
 	emptyStringAsUndefined: true,

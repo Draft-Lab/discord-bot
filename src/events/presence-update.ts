@@ -95,10 +95,13 @@ export async function handlePresenceUpdate(
 					if (remainingUsers.length > 0) {
 						const users = await getGroupSessionUsers(activity.name, activity.type)
 						console.log(`  Still active: ${users.map((u) => u.username).join(", ")}`)
+					} else {
+						// Group session ended (last user left)
+						console.log("  🏁 GROUP SESSION ENDED - All users have left")
 					}
 				} else {
 					// Solo session completed
-					console.log("  Session type: Solo (last user)")
+					console.log("  🏃 SOLO SESSION COMPLETED")
 				}
 			}
 		}

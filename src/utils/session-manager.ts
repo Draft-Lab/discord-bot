@@ -1,3 +1,4 @@
+import { registerPlayerJoined, registerPlayerLeft } from "@/services/api-client"
 import { storage } from "@/services/storage"
 
 export type SessionType = "solo" | "group"
@@ -132,6 +133,9 @@ export async function startUserActivity(
 
 	const sessionType: SessionType = groupSession.users.size > 1 ? "group" : "solo"
 
+	// Register player joined event to API
+	await registerPlayerJoined(userId, activityName)
+
 	return { sessionType, wasAlreadyGroup }
 }
 
@@ -218,12 +222,16 @@ export async function endUserActivity(
 	const duration = Date.now() - userSession.startTimestamp
 	const endTimestamp = Date.now()
 
-	// Update group session
+	// Update group session and determine session type
 	const groupSession = await getGroupSession(activityName, activityType)
 	const remainingUsers = groupSession
 		? Array.from(groupSession.users.keys()).filter((id) => id !== userId)
 		: []
-	const sessionType: SessionType = remainingUsers.length > 0 ? "group" : "solo"
+
+	// Determine if this was a solo or group session
+	// If there are remaining users OR if there was more than 1 user before this user left, it's a group session
+	const wasGroupSession = groupSession ? groupSession.users.size > 1 : false
+	const sessionType: SessionType = wasGroupSession ? "group" : "solo"
 
 	// Save to history before removing
 	const history: ActivityHistory = {
@@ -266,6 +274,9 @@ export async function endUserActivity(
 			await saveGroupSession(groupSession)
 		}
 	}
+
+	// Register player left event to API
+	await registerPlayerLeft(userId, activityName)
 
 	return {
 		sessionType,
