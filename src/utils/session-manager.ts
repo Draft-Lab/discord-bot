@@ -17,9 +17,21 @@ export interface GroupSession {
 	createdAt: number
 }
 
+export interface ActivityHistory {
+	userId: string
+	username: string
+	activityName: string
+	activityType: number
+	startTimestamp: number
+	endTimestamp: number
+	duration: number
+	sessionType: SessionType
+}
+
 // Storage keys
 const SESSIONS_PREFIX = "sessions"
 const USER_SESSIONS_PREFIX = "user-sessions"
+const HISTORY_PREFIX = "activity-history"
 
 function getGroupSessionKey(activityName: string, activityType: number): string {
 	return `${SESSIONS_PREFIX}:${activityType}:${activityName}`
@@ -95,6 +107,11 @@ export async function startUserActivity(
 	userSessions.push(userSession)
 	await saveUserSessions(userId, userSessions)
 
+	// Update global active sessions list
+	const allActive = await getAllActiveSessions()
+	allActive.push(userSession)
+	await saveAllActiveSessions(allActive)
+
 	// Check if group session exists
 	let groupSession = await getGroupSession(activityName, activityType)
 	const wasAlreadyGroup = groupSession !== null && groupSession.users.size > 0
@@ -116,6 +133,64 @@ export async function startUserActivity(
 	const sessionType: SessionType = groupSession.users.size > 1 ? "group" : "solo"
 
 	return { sessionType, wasAlreadyGroup }
+}
+
+// Save activity to history
+async function saveActivityHistory(history: ActivityHistory): Promise<void> {
+	const key = `${HISTORY_PREFIX}:all`
+	const histories = (await storage.getItem<ActivityHistory[]>(key)) ?? []
+	histories.push(history)
+	await storage.setItem(key, histories)
+}
+
+// Get activity history for a period
+export async function getActivityHistory(
+	period: "day" | "week" | "month"
+): Promise<ActivityHistory[]> {
+	const now = Date.now()
+	let startTime: number
+
+	switch (period) {
+		case "day":
+			startTime = now - 24 * 60 * 60 * 1000
+			break
+		case "week":
+			startTime = now - 7 * 24 * 60 * 60 * 1000
+			break
+		case "month":
+			startTime = now - 30 * 24 * 60 * 60 * 1000
+			break
+	}
+
+	const key = `${HISTORY_PREFIX}:all`
+	const allHistories = (await storage.getItem<ActivityHistory[]>(key)) ?? []
+
+	return allHistories
+		.filter((h) => h.endTimestamp >= startTime)
+		.sort((a, b) => b.endTimestamp - a.endTimestamp)
+}
+
+// Get all activities (active + history) for a period
+export async function getAllActivities(period: "day" | "week" | "month"): Promise<{
+	active: UserSession[]
+	history: ActivityHistory[]
+}> {
+	const history = await getActivityHistory(period)
+
+	const startTime =
+		period === "day"
+			? Date.now() - 24 * 60 * 60 * 1000
+			: period === "week"
+				? Date.now() - 7 * 24 * 60 * 60 * 1000
+				: Date.now() - 30 * 24 * 60 * 60 * 1000
+
+	const allActive = await getAllActiveSessions()
+	const activeSessions = allActive.filter((s) => s.startTimestamp >= startTime)
+
+	return {
+		active: activeSessions,
+		history
+	}
 }
 
 // End a user activity session
@@ -141,28 +216,55 @@ export async function endUserActivity(
 	if (!userSession) return null
 
 	const duration = Date.now() - userSession.startTimestamp
+	const endTimestamp = Date.now()
+
+	// Update group session
+	const groupSession = await getGroupSession(activityName, activityType)
+	const remainingUsers = groupSession
+		? Array.from(groupSession.users.keys()).filter((id) => id !== userId)
+		: []
+	const sessionType: SessionType = remainingUsers.length > 0 ? "group" : "solo"
+
+	// Save to history before removing
+	const history: ActivityHistory = {
+		userId: userSession.userId,
+		username: userSession.username,
+		activityName: userSession.activityName,
+		activityType: userSession.activityType,
+		startTimestamp: userSession.startTimestamp,
+		endTimestamp,
+		duration,
+		sessionType
+	}
+	await saveActivityHistory(history)
 
 	// Remove from user's active sessions
 	userSessions.splice(sessionIndex, 1)
 	await saveUserSessions(userId, userSessions)
 
-	// Update group session
-	const groupSession = await getGroupSession(activityName, activityType)
-	if (!groupSession) return null
+	// Update global active sessions list
+	const allActive = await getAllActiveSessions()
+	const globalIndex = allActive.findIndex(
+		(s) =>
+			s.userId === userId && s.activityName === activityName && s.activityType === activityType
+	)
+	if (globalIndex !== -1) {
+		allActive.splice(globalIndex, 1)
+		await saveAllActiveSessions(allActive)
+	}
 
-	// Remove user from group
-	groupSession.users.delete(userId)
+	if (groupSession) {
+		// Remove user from group
+		groupSession.users.delete(userId)
 
-	const remainingUsers = Array.from(groupSession.users.keys())
-	const sessionType: SessionType = remainingUsers.length > 0 ? "group" : "solo"
-
-	if (remainingUsers.length === 0) {
-		// Delete group session if empty
-		const key = getGroupSessionKey(activityName, activityType)
-		await storage.removeItem(key)
-	} else {
-		// Update group session
-		await saveGroupSession(groupSession)
+		if (remainingUsers.length === 0) {
+			// Delete group session if empty
+			const key = getGroupSessionKey(activityName, activityType)
+			await storage.removeItem(key)
+		} else {
+			// Update group session
+			await saveGroupSession(groupSession)
+		}
 	}
 
 	return {
@@ -181,4 +283,18 @@ export async function getGroupSessionUsers(
 	const session = await getGroupSession(activityName, activityType)
 	if (!session) return []
 	return Array.from(session.users.values())
+}
+
+// Get all active sessions from all users
+export async function getAllActiveSessions(): Promise<UserSession[]> {
+	// We'll maintain a list of active sessions in a separate key
+	const key = "all-active-sessions"
+	const sessions = await storage.getItem<UserSession[]>(key)
+	return sessions ?? []
+}
+
+// Save all active sessions list
+export async function saveAllActiveSessions(sessions: UserSession[]): Promise<void> {
+	const key = "all-active-sessions"
+	await storage.setItem(key, sessions)
 }
