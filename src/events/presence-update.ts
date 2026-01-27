@@ -28,7 +28,7 @@ export async function handlePresenceUpdate(
   newPresence: Presence,
 ): Promise<void> {
   // Skip if no user information is available
-  if (!newPresence.user) {
+  if (!newPresence.user || newPresence.user.bot) {
     return;
   }
 
@@ -116,8 +116,17 @@ export async function handlePresenceUpdate(
     }
   }
 
+  const excludedActivityNames = [
+    "Custom Status",
+    "Hang Status",
+    "Godot",
+    "javaw",
+  ];
+
   // Check for new activities
   for (const [key, activity] of newActivityMap) {
+    if (excludedActivityNames.includes(activity.name)) continue;
+
     if (!oldActivityMap.has(key)) {
       const { sessionType, wasAlreadyGroup } = await startUserActivity(
         userId,
