@@ -1,4 +1,5 @@
 import type { Activity, Presence } from "discord.js";
+import { registerPlayerOffline } from "@/services/api-client";
 import {
   endUserActivity,
   getGroupSessionUsers,
@@ -54,6 +55,19 @@ export async function handlePresenceUpdate(
         mobile: newPresence.clientStatus.mobile,
         web: newPresence.clientStatus.web,
       });
+    }
+
+    // Send notification when user goes offline or invisible
+    if (newStatus === "offline" || newStatus === "invisible") {
+      console.log(`[PLAYER OFFLINE] Notifying API for user ${userId}`);
+      const result = await registerPlayerOffline(userId);
+      if (result.success) {
+        console.log(`[PLAYER OFFLINE] Successfully notified API`);
+      } else {
+        console.error(
+          `[PLAYER OFFLINE] Failed to notify API: ${result.message}`,
+        );
+      }
     }
   }
 
